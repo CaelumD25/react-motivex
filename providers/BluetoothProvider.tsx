@@ -3,8 +3,6 @@ import { createContext, useState } from "react";
 
 const BluetoothContext = createContext({});
 export const BluetoothProvider = ({ children }) => {
-    const { settings, updateSetting } = useSettings();
-
     const [connectedDevice, setConnectedDevice] = useState(null);
     const [batteryLevel, setBatteryLevel] = useState(null);
     const [crankRevCount, setCrankRevCount] = useState(0);

@@ -30,6 +30,7 @@ export default function App() {
                                 </TouchableOpacity>
                             ),
                             headerTitleStyle: { fontSize: 30 },
+                            headerTitle: "Select a video, or start moving!",
                         })}
                     />
                     <Stack.Screen
