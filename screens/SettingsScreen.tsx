@@ -1,57 +1,48 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, Switch, Button, StyleSheet } from "react-native";
-import { Picker } from "@react-native-picker/picker";
+import React from "react";
+import { View, Text, Switch, Button } from "react-native";
 import styles from "../Styles";
-import { SettingsHandler } from "../util/SettingsHandler";
+import { useSettings } from "../providers/SettingsProvider";
 
-const SettingsScreen = ({ navigation, route }) => {
-    const settings = new SettingsHandler();
-    const [effortBar, setEffortBar] = useState(false);
-    const [distance, setDistance] = useState(false);
-    const [speedometer, setSpeedometer] = useState(false);
-    const [difficulty, setDifficulty] = useState("novice");
-    const [playbackSpeed, setPlaybackSpeed] = useState(1);
-
-    useEffect(() => {
-        const initializeSettings = async () => {
-            setEffortBar(await settings.getEffortBarEnabled());
-            setDistance(await settings.getDistanceEnabled());
-            setSpeedometer(await settings.getSpeedometerEnabled());
-            setDifficulty(await settings.getDifficulty());
-            setPlaybackSpeed(await settings.getPlaybackSpeedModifier());
-        };
-        initializeSettings();
-    }, []);
+const SettingsScreen = () => {
+    const {
+        settings,
+        setEffortBarEnabled,
+        setDistanceEnabled,
+        setSpeedometerEnabled,
+        setDifficulty,
+        setPlaybackSpeedModifier,
+    } = useSettings();
 
     const updateEffortBar = async (value: boolean) => {
-        await settings.setEffortBarEnabled(value);
-        setEffortBar(value);
+        await setEffortBarEnabled(value);
     };
 
     const updateDistanceEnabled = async (value: boolean) => {
-        await settings.setDistanceEnabled(value);
-        setDistance(value);
+        await setDistanceEnabled(value);
     };
     const updateSpeedometerEnabled = async (value: boolean) => {
-        await settings.setSpeedometerEnabled(value);
-        setSpeedometer(value);
+        await setSpeedometerEnabled(value);
     };
     const updateDifficulty = async () => {
-        if (difficulty === "novice") {
-            await settings.setDifficulty("intermediate");
-            setDifficulty("intermediate");
-        } else if (difficulty === "intermediate") {
-            await settings.setDifficulty("advanced");
-            setDifficulty("advanced");
-        } else {
-            await settings.setDifficulty("novice");
-            setDifficulty("novice");
+        switch (settings.difficulty) {
+            case "novice":
+                await setDifficulty("intermediate");
+                break;
+            case "intermediate":
+                await setDifficulty("advanced");
+                break;
+            case "advanced":
+                await setDifficulty("novice");
+                break;
+            default:
+                console.error("Invalid difficulty");
         }
     };
 
-    const updateDefaultPlaybackSpeed = async (value: number) => {
-        setPlaybackSpeed(playbackSpeed === 1 ? 2 : 1);
-        await settings.setPlaybackSpeedModifier(playbackSpeed === 1 ? 2 : 1);
+    const updateDefaultPlaybackSpeed = async () => {
+        await setPlaybackSpeedModifier(
+            settings.playbackSpeedModifier === 1 ? 2 : 1,
+        );
     };
 
     return (
@@ -60,13 +51,16 @@ const SettingsScreen = ({ navigation, route }) => {
 
             <View style={styles.settingsOption}>
                 <Text style={styles.textBox}>Effort Bar Enabled:</Text>
-                <Switch value={effortBar} onValueChange={updateEffortBar} />
+                <Switch
+                    value={settings.effortBarEnabled}
+                    onValueChange={updateEffortBar}
+                />
             </View>
 
             <View style={styles.settingsOption}>
                 <Text style={styles.textBox}>Distance Enabled:</Text>
                 <Switch
-                    value={distance}
+                    value={settings.distanceEnabled}
                     onValueChange={updateDistanceEnabled}
                 />
             </View>
@@ -74,7 +68,7 @@ const SettingsScreen = ({ navigation, route }) => {
             <View style={styles.settingsOption}>
                 <Text style={styles.textBox}>Speedometer Enabled:</Text>
                 <Switch
-                    value={speedometer}
+                    value={settings.speedometerEnabled}
                     onValueChange={updateSpeedometerEnabled}
                 />
             </View>
@@ -82,7 +76,7 @@ const SettingsScreen = ({ navigation, route }) => {
             <View style={styles.settingsOption}>
                 <Text style={styles.textBox}>Difficulty Setting:</Text>
                 <Button
-                    title={`Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`}
+                    title={`Difficulty: ${settings.difficulty.charAt(0).toUpperCase() + settings.difficulty.slice(1)}`}
                     onPress={updateDifficulty}
                 />
             </View>
@@ -90,7 +84,7 @@ const SettingsScreen = ({ navigation, route }) => {
             <View style={styles.settingsOption}>
                 <Text style={styles.textBox}>Default Playback Speed:</Text>
                 <Button
-                    title={`Playback: ${playbackSpeed}x`}
+                    title={`Playback: ${settings.playbackSpeedModifier}x`}
                     onPress={updateDefaultPlaybackSpeed}
                 />
             </View>

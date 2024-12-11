@@ -5,7 +5,6 @@ import styles from "../Styles";
 import { useEvent, useEventListener } from "expo";
 import Slider from "@react-native-community/slider";
 import { ProgressBar } from "@react-native-community/progress-bar-android";
-import { SettingsHandler } from "../util/SettingsHandler";
 import * as test from "node:test";
 
 export default function VideoPlayerScreen({ navigation, route }) {
