@@ -52,6 +52,10 @@ export const BluetoothProvider = ({ children }) => {
         return true;
     };
 
+    useEffect(() => {
+        requestBluetoothPermissions();
+    });
+
     const exploreDevice = async (device) => {
         const services = await device.services();
 

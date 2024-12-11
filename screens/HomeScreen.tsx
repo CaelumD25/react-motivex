@@ -23,23 +23,20 @@ const HomeScreen = ({ navigation }) => {
     const [videoFiles, setVideoFiles] = useState<VideoFileWithThumbnail[]>([]);
 
     useEffect(() => {
-        navigation.setOptions({ title: "Select a video, or start moving!" });
-
         const checkPermissions = async () => {
             const permissionsGranted = await requestStoragePermission();
             if (permissionsGranted) {
                 await getFilesList();
             }
         };
-
-        checkPermissions().then((r) =>
+        checkPermissions().then(() =>
             console.debug(
                 `Video Files Retrieved: ${videoFiles.length != 0 ? videoFiles[0] : "No Video Files Found"}`,
             ),
         );
     }, []);
 
-    const requestStoragePermission = async () => {
+    const requestStoragePermission = async (): Promise<boolean> => {
         try {
             const granted = await PermissionsAndroid.request(
                 PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
@@ -93,13 +90,14 @@ const HomeScreen = ({ navigation }) => {
             const { uri } = await VideoThumbnails.getThumbnailAsync(
                 `file:///sdcard/Download/${fileName}`,
                 {
-                    time: 15000,
+                    time: 12000,
                     quality: 0.8,
                 },
             );
             return uri;
         } catch (e) {
             console.warn("Thumbnail generation error:", e);
+
             return null;
         }
     };
