@@ -32,7 +32,11 @@ const HomeScreen = ({ navigation }) => {
             }
         };
 
-        checkPermissions();
+        checkPermissions().then((r) =>
+            console.debug(
+                `Video Files Retrieved: ${videoFiles.length != 0 ? videoFiles[0] : "No Video Files Found"}`,
+            ),
+        );
     }, []);
 
     const requestStoragePermission = async () => {
