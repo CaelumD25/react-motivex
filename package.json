@@ -9,7 +9,6 @@
     "prebuild": "$env:EXPO_TV = 'true'; npx expo prebuild --clean"
   },
   "dependencies": {
-    "@config-plugins/react-native-ble-plx": "^7.0.0",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-community/progress-bar-android": "^1.0.5",
     "@react-native-community/slider": "4.5.5",
@@ -59,10 +58,7 @@
           "READ_EXTERNAL_STORAGE"
         ]
       }
-    },
-    "plugins": [
-      "@config-plugins/react-native-ble-plx"
-    ]
+    }
   },
   "private": true
 }
