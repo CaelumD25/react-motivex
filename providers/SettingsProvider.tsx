@@ -19,8 +19,25 @@ const DEFAULT_SETTINGS: settings_t = {
     playbackSpeedModifier: 1,
 };
 
-// Create the context
-const SettingsContext = createContext({});
+interface SettingsContextType {
+    settings: settings_t;
+    setSettings: React.Dispatch<React.SetStateAction<settings_t>>;
+    isLoading: boolean;
+    updateSetting: (
+        key: string,
+        value: boolean | string | number,
+    ) => Promise<void>;
+    setDistanceEnabled: (value: boolean) => Promise<void>;
+    setTotalDistance: (value: number) => Promise<void>;
+    setEffortBarEnabled: (value: boolean) => Promise<void>;
+    setSpeedometerEnabled: (value: boolean) => Promise<void>;
+    setDifficulty: (value: string) => Promise<void>;
+    setPlaybackSpeedModifier: (value: number) => Promise<void>;
+}
+
+const SettingsContext = createContext<SettingsContextType | undefined>(
+    undefined,
+);
 
 export const SettingsProvider = ({ children }) => {
     const [settings, setSettings] = useState(DEFAULT_SETTINGS);
@@ -110,9 +127,11 @@ export const SettingsProvider = ({ children }) => {
     return (
         <SettingsContext.Provider
             value={{
-                ...settings,
+                settings,
+                setSettings,
                 ...methods,
                 isLoading,
+                updateSetting,
             }}
         >
             {children}
