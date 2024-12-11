@@ -6,10 +6,11 @@ import { useEvent, useEventListener } from "expo";
 import Slider from "@react-native-community/slider";
 import { ProgressBar } from "@react-native-community/progress-bar-android";
 import * as test from "node:test";
+import { useSettings } from "../providers/SettingsProvider";
 
 export default function VideoPlayerScreen({ navigation, route }) {
     const { path } = route.params;
-    const settings = new SettingsHandler();
+    const { settings, setSettings, setTotalDistance } = useSettings();
 
     const [videoUri] = useState<string | undefined>(path);
     const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
@@ -26,23 +27,19 @@ export default function VideoPlayerScreen({ navigation, route }) {
     });
 
     const [currentDistance, setCurrentDistance] = useState<number>(0);
-    const [progressBarEnabled, setProgressBarEnabled] = useState<boolean>(true);
     const [playbackSpeedModifier, setPlaybackSpeedModifier] =
         useState<number>(0.1);
-    const [userDifficulty, setUserDifficulty] = useState<string>();
     const [currentRPM, setCurrentRPM] = useState<number>(0);
     const [currentSpeed, setCurrentSpeed] = useState(0);
     const [exitCountdown, setExitCountdown] = useState<number | null>(null);
     const [isInitialized, setIsInitialized] = useState<boolean>(false);
-    let [totalDistance, setTotalDistance] = useState<number>(0);
 
     const incrementDistance = async (addedDistance: number) => {
         if (isInitialized) {
             const newDistance = currentDistance + addedDistance;
             setCurrentDistance(newDistance);
-            const newTotalDistance = totalDistance + addedDistance;
-            setTotalDistance(newTotalDistance);
-            await settings.setTotalDistance(newTotalDistance);
+            const newTotalDistance = settings.totalDistance + addedDistance;
+            await setTotalDistance(newTotalDistance);
         }
     };
 
@@ -50,19 +47,13 @@ export default function VideoPlayerScreen({ navigation, route }) {
         const initializeSettings = async () => {
             try {
                 setCurrentDistance(0);
-                setProgressBarEnabled(await settings.getEffortBarEnabled());
-                setPlaybackSpeedModifier(
-                    await settings.getPlaybackSpeedModifier(),
-                );
                 changePlaybackSpeed(playbackSpeed);
-                setUserDifficulty(await settings.getDifficulty());
-                setTotalDistance(await settings.getTotalDistance());
                 setIsInitialized(true);
             } catch (error) {
                 console.error("Error initializing settings:", error);
             }
         };
-        initializeSettings();
+        initializeSettings().then((r) => console.debug("Implemented"));
     }, []);
 
     useEffect(() => {
@@ -154,7 +145,8 @@ export default function VideoPlayerScreen({ navigation, route }) {
                       : "." + newString[1])
             : numberToFormat.toString();
     };
-    const controlsEnabled = true;
+    const controlsEnabled =
+        !process.env.NODE_ENV || process.env.NODE_ENV === "development";
 
     return (
         <View style={styles.container}>
@@ -181,7 +173,7 @@ export default function VideoPlayerScreen({ navigation, route }) {
                         </Text>
                     </View>
 
-                    {progressBarEnabled ? (
+                    {settings.effortBarEnabled ? (
                         <ProgressBar
                             styleAttr="Horizontal"
                             progress={progress}
