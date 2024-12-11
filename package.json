@@ -1,5 +1,5 @@
 {
-  "name": "Motivex React",
+  "name": "MotivexReact",
   "version": "1.0.0",
   "scripts": {
     "start": "$env:EXPO_TV = 'true'; npx expo start",
