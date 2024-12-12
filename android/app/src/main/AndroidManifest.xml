@@ -15,6 +15,7 @@
   <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
   <uses-feature android:name="android.hardware.faketouch" android:required="false"/>
   <uses-feature android:name="android.software.leanback" android:required="false"/>
+  <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>
@@ -36,8 +37,8 @@
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
-        <data android:scheme="com.anonymous.VideoTest"/>
-        <data android:scheme="exp+videotest"/>
+        <data android:scheme="com.canassist.Motivex"/>
+        <data android:scheme="exp+motivex"/>
       </intent-filter>
     </activity>
   </application>

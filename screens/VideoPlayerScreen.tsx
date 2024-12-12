@@ -34,11 +34,12 @@ export default function VideoPlayerScreen({ navigation, route }) {
     const [exitCountdown, setExitCountdown] = useState<number | null>(null);
     const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
+    const totalDistance = settings.totalDistance;
     const incrementDistance = async (addedDistance: number) => {
         if (isInitialized) {
             const newDistance = currentDistance + addedDistance;
             setCurrentDistance(newDistance);
-            const newTotalDistance = settings.totalDistance + addedDistance;
+            const newTotalDistance = totalDistance + addedDistance;
             await setTotalDistance(newTotalDistance);
         }
     };

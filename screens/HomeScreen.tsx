@@ -21,6 +21,7 @@ type VideoFileWithThumbnail = {
 const HomeScreen = ({ navigation }) => {
     const { settings, updateSetting } = useSettings();
     const [videoFiles, setVideoFiles] = useState<VideoFileWithThumbnail[]>([]);
+    const rootFileDirectoryPath = "/storage/1AE5-779C/";
 
     useEffect(() => {
         const checkPermissions = async () => {
@@ -58,8 +59,9 @@ const HomeScreen = ({ navigation }) => {
 
     const getFilesList = async (): Promise<void> => {
         try {
-            const downloadsPath = "file:///sdcard/Download/";
+            const downloadsPath = `file://${rootFileDirectoryPath}`;
             const files = await FileSystem.readDirectoryAsync(downloadsPath);
+            console.log(files);
 
             const videoExtensions = [".mp4", ".avi", ".mov", ".mkv"];
             const filteredVideoFiles = files.filter((file) =>
@@ -88,7 +90,7 @@ const HomeScreen = ({ navigation }) => {
     ): Promise<string | null> => {
         try {
             const { uri } = await VideoThumbnails.getThumbnailAsync(
-                `file:///sdcard/Download/${fileName}`,
+                `file://${rootFileDirectoryPath}${fileName}`,
                 {
                     time: 12000,
                     quality: 0.8,

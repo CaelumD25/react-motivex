@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "VideoTest",
-    "slug": "VideoTest",
+    "name": "Motivex",
+    "slug": "Motivex",
     "version": "1.0.0",
     "sdkVersion": "52.0.0",
     "platforms": [
@@ -10,8 +10,9 @@
       "web",
       "tv"
     ],
+
     "android": {
-      "package": "com.anonymous.VideoTest",
+      "package": "com.canassist.Motivex",
       "isTV": true,
       "splash": {
         "image": "./assets/images/icon-1920x720.png"
@@ -23,16 +24,29 @@
       }
     },
     "plugins": [
-      "@config-plugins/react-native-ble-plx",
+      [
+	    "@config-plugins/react-native-ble-plx",
+        {
+          "isBackgroundEnabled": true,
+          "modes": ["peripheral", "central"],
+          "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to bluetooth devices",
+          "bluetoothPeripheralPermission": "Allow $(PRODUCT_NAME) to connect to bluetooth devices",
+        }
+      ],
 
       [
         "expo-file-system",
         {
           "androidPermission": [
             "READ_EXTERNAL_STORAGE",
-            "WRITE_EXTERNAL_STORAGE"
+            "WRITE_EXTERNAL_STORAGE",
+            "BLUETOOTH_SCAN",
+            "BLUETOOTH_CONNECT",
+            "BLUETOOTH_ADMIN",
+            "BLUETOOTH"
           ]
         }
+
       ],
       [
         "@react-native-tvos/config-tv",
@@ -49,8 +63,7 @@
           }
         }
       ],
-      "expo-video",
-      "react-native-ble-plx"
+      "expo-video"
     ]
   }
 }

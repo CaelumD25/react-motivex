@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
 import { BleManager, Device } from "react-native-ble-plx";
-import { PermissionsAndroid, Platform } from "react-native";
+import { Platform } from "react-native";
+import { check, request, PERMISSIONS, RESULTS } from "react-native-permissions";
 
 // Define UUIDs for services and characteristics
 const CYCLING_SPEED_CADENCE_SERVICE = "00001816-0000-1000-8000-00805f9b34fb";
@@ -25,7 +26,6 @@ const BluetoothContext = createContext<BluetoothContextType | undefined>(
     undefined,
 );
 
-// Bluetooth Provider Component
 export const BluetoothProvider = ({ children }) => {
     const [bleManager] = useState(new BleManager());
     const [isDiscovering, setIsDiscovering] = useState(false);
@@ -36,25 +36,100 @@ export const BluetoothProvider = ({ children }) => {
     const [currentDevice, setCurrentDevice] = useState<Device | null>(null);
     const [isPairing, setIsPairing] = useState(false);
 
-    // Request Bluetooth Permissions
+    // Comprehensive Bluetooth Permissions Request
     const requestBluetoothPermissions = async () => {
-        if (Platform.OS === "android" && Platform.Version >= 23) {
-            const granted = await PermissionsAndroid.requestMultiple([
-                PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-                PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-            ]);
-            return Object.values(granted).every(
-                (permission) =>
-                    permission === PermissionsAndroid.RESULTS.GRANTED,
-            );
+        if (Platform.OS === "android") {
+            try {
+                // List of permissions to check and request
+                const bluetoothPermissions = [
+                    PERMISSIONS.ANDROID.BLUETOOTH_SCAN,
+                    PERMISSIONS.ANDROID.BLUETOOTH_CONNECT,
+                    PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION,
+                ];
+
+                // Check and request each permission
+                const permissionResults = await Promise.all(
+                    bluetoothPermissions.map(async (permission) => {
+                        try {
+                            // First check the current status
+                            const checkResult = await check(permission);
+                            console.log(
+                                `Permission ${permission} current status:`,
+                                checkResult,
+                            );
+
+                            // If not determined or denied, request the permission
+                            if (
+                                checkResult === RESULTS.DENIED ||
+                                checkResult === RESULTS.BLOCKED
+                            ) {
+                                const requestResult = await request(permission);
+                                console.log(
+                                    `Permission ${permission} request result:`,
+                                    requestResult,
+                                );
+                                return requestResult;
+                            }
+                            return checkResult;
+                        } catch (err) {
+                            console.error(
+                                `Error checking/requesting ${permission}:`,
+                                err,
+                            );
+                            return null;
+                        }
+                    }),
+                );
+
+                // Check if all critical permissions are granted
+                const allGranted = permissionResults.every(
+                    (result) => result === RESULTS.GRANTED,
+                );
+
+                console.log("All Bluetooth Permissions Granted:", allGranted);
+                return allGranted;
+            } catch (error) {
+                console.error(
+                    "Comprehensive Bluetooth Permission Error:",
+                    error,
+                );
+                return false;
+            }
         }
         return true;
     };
 
+    // Usage in a component or effect
+    const setupBluetooth = async () => {
+        try {
+            const permissionsGranted = await requestBluetoothPermissions();
+            if (permissionsGranted) {
+                // Proceed with Bluetooth initialization
+                console.log("Bluetooth permissions successfully granted");
+            } else {
+                console.warn("Bluetooth permissions not fully granted");
+                // Handle permission denial
+                // Maybe show a dialog to the user explaining why permissions are needed
+            }
+        } catch (error) {
+            console.error("Bluetooth setup error:", error);
+        }
+    };
+
     useEffect(() => {
-        requestBluetoothPermissions();
-    });
+        const initializeBluetooth = async () => {
+            try {
+                const hasPermissions = await requestBluetoothPermissions();
+                if (!hasPermissions) {
+                    console.warn("Bluetooth permissions not granted");
+                }
+            } catch (error) {
+                console.error("Bluetooth initialization error:", error);
+            }
+        };
+
+        initializeBluetooth();
+    }, []);
 
     const exploreDevice = async (device) => {
         const services = await device.services();
@@ -75,6 +150,7 @@ export const BluetoothProvider = ({ children }) => {
     // Start Device Discovery
     const startDeviceDiscovery = async () => {
         const hasPermissions = await requestBluetoothPermissions();
+        console.log(`Has Permissions: ${hasPermissions}`);
         if (!hasPermissions) {
             setPairingProgressInfo("Permission denied");
             return;
@@ -93,6 +169,7 @@ export const BluetoothProvider = ({ children }) => {
                     setPairingProgressInfo("Error occurred");
                     return;
                 }
+                console.log(device);
 
                 if (device && !isPairing) {
                     // Connection logic for non-pairing mode

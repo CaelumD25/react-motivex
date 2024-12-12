@@ -2,8 +2,11 @@ import React from "react";
 import { View, Text, Switch, Button } from "react-native";
 import styles from "../Styles";
 import { useSettings } from "../providers/SettingsProvider";
+import { useBluetooth } from "../providers/BluetoothProvider";
 
 const SettingsScreen = () => {
+    const { startDeviceDiscovery } = useBluetooth();
+
     const {
         settings,
         setEffortBarEnabled,
@@ -101,7 +104,7 @@ const SettingsScreen = () => {
 
             <Button
                 title="Pair Cadence Sensor"
-                onPress={() => alert("Pairing cadence sensor...")}
+                onPress={() => startDeviceDiscovery()}
             />
         </View>
     );

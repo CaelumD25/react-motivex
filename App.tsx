@@ -6,45 +6,48 @@ import HomeScreen from "./screens/HomeScreen";
 import { TouchableOpacity, Text } from "react-native";
 import SettingsScreen from "./screens/SettingsScreen";
 import { SettingsProvider } from "./providers/SettingsProvider";
+import { BluetoothProvider } from "./providers/BluetoothProvider";
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
     return (
-        <SettingsProvider>
-            <NavigationContainer>
-                <Stack.Navigator id={undefined} initialRouteName="Home">
-                    <Stack.Screen
-                        name="Home"
-                        component={HomeScreen}
-                        options={({ navigation }) => ({
-                            headerRight: () => (
-                                <TouchableOpacity
-                                    onPress={() =>
-                                        navigation.navigate("Settings")
-                                    }
-                                >
-                                    <Text style={{ fontSize: 24 }}>
-                                        Settings
-                                    </Text>
-                                </TouchableOpacity>
-                            ),
-                            headerTitleStyle: { fontSize: 30 },
-                            headerTitle: "Select a video, or start moving!",
-                        })}
-                    />
-                    <Stack.Screen
-                        name="Video"
-                        component={VideoPlayerScreen}
-                        options={{ headerShown: false }}
-                    />
-                    <Stack.Screen
-                        name="Settings"
-                        component={SettingsScreen}
-                        options={{ title: "Settings" }}
-                    />
-                </Stack.Navigator>
-            </NavigationContainer>
-        </SettingsProvider>
+        <BluetoothProvider>
+            <SettingsProvider>
+                <NavigationContainer>
+                    <Stack.Navigator id={undefined} initialRouteName="Home">
+                        <Stack.Screen
+                            name="Home"
+                            component={HomeScreen}
+                            options={({ navigation }) => ({
+                                headerRight: () => (
+                                    <TouchableOpacity
+                                        onPress={() =>
+                                            navigation.navigate("Settings")
+                                        }
+                                    >
+                                        <Text style={{ fontSize: 24 }}>
+                                            Settings
+                                        </Text>
+                                    </TouchableOpacity>
+                                ),
+                                headerTitleStyle: { fontSize: 30 },
+                                headerTitle: "Select a video, or start moving!",
+                            })}
+                        />
+                        <Stack.Screen
+                            name="Video"
+                            component={VideoPlayerScreen}
+                            options={{ headerShown: false }}
+                        />
+                        <Stack.Screen
+                            name="Settings"
+                            component={SettingsScreen}
+                            options={{ title: "Settings" }}
+                        />
+                    </Stack.Navigator>
+                </NavigationContainer>
+            </SettingsProvider>
+        </BluetoothProvider>
     );
 }
