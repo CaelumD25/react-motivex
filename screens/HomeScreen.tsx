@@ -12,6 +12,7 @@ import styles from "../Styles";
 import VideoCard from "../components/VideoCard";
 import { useSettings } from "../providers/SettingsProvider";
 import { formatNumber } from "../Util";
+import { Permission } from "react-native-permissions";
 
 type VideoFileWithThumbnail = {
     fileName: string;
@@ -23,10 +24,23 @@ const HomeScreen = ({ navigation }) => {
     const [videoFiles, setVideoFiles] = useState<VideoFileWithThumbnail[]>([]);
     const rootFileDirectoryPath = "/storage/1AE5-779C/";
 
+    // TODO add check for it location disabled
     useEffect(() => {
         const checkPermissions = async () => {
-            const permissionsGranted = await requestStoragePermission();
-            if (permissionsGranted) {
+            const storagePermissionsGranted = await requestPermission(
+                PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+                "Storage Permission",
+                "App needs access to your storage to read video files",
+            );
+            const locationPermissionsGranted = await requestPermission(
+                PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+                "Location Permission",
+                "App needs access to your location use bluetooth",
+            );
+            if (!locationPermissionsGranted) {
+                console.warn("Location Permission Not Granted");
+            }
+            if (storagePermissionsGranted) {
                 await getFilesList();
             }
         };
@@ -37,14 +51,17 @@ const HomeScreen = ({ navigation }) => {
         );
     }, []);
 
-    const requestStoragePermission = async (): Promise<boolean> => {
+    const requestPermission = async (
+        requestedPermissions: any,
+        title: string,
+        message: string,
+    ): Promise<boolean> => {
         try {
             const granted = await PermissionsAndroid.request(
-                PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+                requestedPermissions,
                 {
-                    title: "Storage Permission",
-                    message:
-                        "App needs access to your storage to read video files",
+                    title: title,
+                    message: message,
                     buttonNeutral: "Ask Me Later",
                     buttonNegative: "Cancel",
                     buttonPositive: "OK",

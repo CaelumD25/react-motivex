@@ -5,7 +5,13 @@ import { useSettings } from "../providers/SettingsProvider";
 import { useBluetooth } from "../providers/BluetoothProvider";
 
 const SettingsScreen = () => {
-    const { startDeviceDiscovery } = useBluetooth();
+    const {
+        startDeviceDiscovery,
+        stopDeviceDiscovery,
+        exploreDevice,
+        monitorMovementSensor,
+        disconnectFromCurrentDevices,
+    } = useBluetooth();
 
     const {
         settings,
@@ -101,11 +107,27 @@ const SettingsScreen = () => {
                 <Text style={styles.textBox}>Cadence Sensor:</Text>
                 <Text style={styles.textBox}>Not Connected</Text>
             </View>
-
-            <Button
-                title="Pair Cadence Sensor"
-                onPress={() => startDeviceDiscovery()}
-            />
+            <View
+                style={{ flexDirection: "row", flex: 3, alignItems: "center" }}
+            >
+                <Button
+                    title="Start Scanning"
+                    onPress={() => startDeviceDiscovery()}
+                />
+                <Button
+                    title="Stop Scanning"
+                    onPress={() => stopDeviceDiscovery()}
+                />
+                <Button title="View Services" onPress={() => exploreDevice()} />
+                <Button
+                    title="Start watching sensor"
+                    onPress={() => monitorMovementSensor()}
+                />
+                <Button
+                    title="Disconnect"
+                    onPress={() => disconnectFromCurrentDevices()}
+                />
+            </View>
         </View>
     );
 };
