@@ -1,11 +1,18 @@
 import React, {
     createContext,
-    useState,
+    useCallback,
     useContext,
     useEffect,
-    useCallback,
+    useState,
 } from "react";
-import { Base64, BleManager, Device } from "react-native-ble-plx";
+import {
+    Base64,
+    BleManager,
+    Characteristic,
+    Device,
+    ScanMode,
+    Service,
+} from "react-native-ble-plx";
 import { Buffer } from "buffer";
 
 // Define UUIDs for services and characteristics
@@ -59,29 +66,12 @@ export const BluetoothProvider = ({ children }) => {
 
     const [scannedDevices, setScannedDevices] = useState([]);
 
-    const startDeviceDiscovery = useCallback(() => {
-        console.log("Starting device discovery");
-        manager.startDeviceScan(null, null, (error, scannedDevice) => {
-            if (error) {
-                throw new Error(error.message);
-            }
-            if (
-                scannedDevice.name != null &&
-                scannedDevice.name.startsWith("CAD")
-            ) {
-                connectToDevice(scannedDevice.id).then((r) =>
-                    stopDeviceDiscovery(),
-                );
-            }
-            scannedDevices.push(scannedDevice);
-        });
-    }, [scannedDevices]);
-
     const connectToDevice = useCallback(
         async (deviceId: string): Promise<boolean> => {
             try {
                 if (await manager.isDeviceConnected(deviceId)) {
                     await disconnectFromDevice(deviceId);
+                    if (await manager.isDeviceConnected(deviceId)) return false;
                 }
                 const newDevice = await manager.connectToDevice(deviceId);
                 setCurrentDevice(newDevice);
@@ -89,21 +79,47 @@ export const BluetoothProvider = ({ children }) => {
                 console.info(`Connected to ${newDevice.name}`);
                 return true;
             } catch (error) {
-                console.error(error);
+                console.error(`Error with connecting to device ${error}`);
                 return false;
             }
         },
         [],
     );
 
+    useEffect(() => {
+        monitorMovementSensor();
+    }, [currentDevice]);
+
+    const stopDeviceDiscovery = useCallback(async () => {
+        await manager.stopDeviceScan();
+        setIsDiscovering(false);
+    }, []);
+
+    const startDeviceDiscovery = useCallback(async () => {
+        if (isDiscovering) return;
+        setIsDiscovering(true);
+        console.log("Starting device discovery");
+        await manager.startDeviceScan(null, null, (error, scannedDevice) => {
+            if (error) {
+                throw new Error(error.message);
+            }
+            if (
+                scannedDevice.name != null &&
+                scannedDevice.name.startsWith("CAD")
+            ) {
+                connectToDevice(scannedDevice.id).then(
+                    async (r) => await stopDeviceDiscovery(),
+                );
+            }
+        });
+    }, [scannedDevices]);
+
     const discoverDeviceServices = useCallback(async () => {
         if (!currentDevice) {
             throw new Error("Device is not connected to the app");
         }
         try {
-            console.log(
-                await currentDevice.discoverAllServicesAndCharacteristics(),
-            );
+            await currentDevice.discoverAllServicesAndCharacteristics();
         } catch (error) {
             console.log(`discover all services ${error}`);
             try {
@@ -128,30 +144,41 @@ export const BluetoothProvider = ({ children }) => {
     const disconnectFromCurrentDevices = useCallback(async () => {
         try {
             const devices: Device[] = await manager.connectedDevices(null);
-            for (const device in devices) {
-                await disconnectFromDevice(device);
-                console.log("Disconnected device:", device);
+            for (const device of devices) {
+                await disconnectFromDevice(device.id);
+                console.log("Disconnected device:", device.name);
             }
         } catch (error) {
             console.error(error);
         }
     }, [disconnectFromDevice]);
 
-    const monitorMovementSensor = useCallback(async () => {
-        if (!currentDevice) {
+    // Todo The original CSC characteristic is a notification that a revolution has occured
+
+    const monitorMovementSensorWrapper = useCallback(async (device: Device) => {
+        if (!device) {
             throw new Error("No device connected");
         }
+        console.log("Watching movements");
+        const services: Service[] = await device.services();
+
         try {
-            currentDevice.monitorCharacteristicForService(
+            device.monitorCharacteristicForService(
                 CYCLING_SPEED_CADENCE_SERVICE,
                 CSC_MEASUREMENT_CHARACTERISTIC,
                 (error, characteristic) => {
                     console.log(
                         "Received device characteristic for service:",
                         error,
-                        error,
                     );
-                    console.log(characteristic.value);
+                    const byteCharacters = atob(characteristic.value);
+                    console.log();
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    // ToDO 2 numbers not 4 ([16 bits])
+                    console.log(byteNumbers);
                     console.log(
                         decodeCharacteristicValueToDecimal(
                             characteristic.value,
@@ -167,7 +194,11 @@ export const BluetoothProvider = ({ children }) => {
         } catch (error) {
             console.error(error);
         }
-    }, [currentDevice]);
+    }, []);
+
+    const monitorMovementSensor = async () => {
+        await monitorMovementSensorWrapper(currentDevice);
+    };
 
     const exploreDevice = async () => {
         console.log(`Explore device ${currentDevice}`);
@@ -204,9 +235,6 @@ export const BluetoothProvider = ({ children }) => {
         return Buffer.from(value).toString("base64");
     };
 
-    const stopDeviceDiscovery = useCallback(() => {
-        manager.stopDeviceScan().then(() => console.log("Stopped scanning"));
-    }, []);
     const pairNewDevice = () => {};
     // Start Device Discovery
 
