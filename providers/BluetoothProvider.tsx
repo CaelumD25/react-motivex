@@ -3,16 +3,10 @@ import React, {
     useCallback,
     useContext,
     useEffect,
+    useMemo,
     useState,
 } from "react";
-import {
-    Base64,
-    BleManager,
-    Characteristic,
-    Device,
-    ScanMode,
-    Service,
-} from "react-native-ble-plx";
+import { Base64, BleManager, Device } from "react-native-ble-plx";
 import { Buffer } from "buffer";
 
 // Define UUIDs for services and characteristics
@@ -23,6 +17,7 @@ const BATTERY_LEVEL_CHARACTERISTIC = "00002A19-0000-1000-8000-00805f9b34fb";
 
 // Bluetooth Provider Context Interface
 interface BluetoothContextType {
+    rpm: number;
     isDiscovering: boolean;
     isDeviceConnected: boolean;
     batteryLevel: string;
@@ -42,36 +37,30 @@ const BluetoothContext = createContext<BluetoothContextType | undefined>(
 );
 
 export const BluetoothProvider = ({ children }) => {
-    const manager = new BleManager();
+    const manager = useMemo(() => new BleManager(), []);
     const [isDiscovering, setIsDiscovering] = useState(false);
     const [isDeviceConnected, setIsDeviceConnected] = useState(false);
     const [batteryLevel, setBatteryLevel] = useState("");
-    const [crankRevCount, setCrankRevCount] = useState(0);
     const [pairingProgressInfo, setPairingProgressInfo] = useState("");
     const [currentDevice, setCurrentDevice] = useState<Device | null>(null);
     const [isPairing, setIsPairing] = useState(false);
 
-    // Comprehensive Bluetooth Permissions Request
-
-    useEffect(() => {
-        const initializeBluetooth = async () => {
-            try {
-            } catch (error) {
-                console.error("Bluetooth initialization error:", error);
-            }
-        };
-
-        initializeBluetooth();
-    }, []);
+    const [rpm, setRpm] = useState(0);
+    const [crankRevCount, setCrankRevCount] = useState(0);
+    const [crankTimeEvent, setCrankTimeEvent] = useState(0);
 
     const [scannedDevices, setScannedDevices] = useState([]);
 
     const connectToDevice = useCallback(
         async (deviceId: string): Promise<boolean> => {
             try {
-                if (await manager.isDeviceConnected(deviceId)) {
-                    await disconnectFromDevice(deviceId);
-                    if (await manager.isDeviceConnected(deviceId)) return false;
+                const connectedDevices = await manager.devices(null);
+                for (let dev of connectedDevices) {
+                    if (dev.id === deviceId) {
+                        setCurrentDevice(dev);
+                        console.info(`Already connected to ${dev.name}`);
+                        return true;
+                    }
                 }
                 const newDevice = await manager.connectToDevice(deviceId);
                 setCurrentDevice(newDevice);
@@ -86,10 +75,6 @@ export const BluetoothProvider = ({ children }) => {
         [],
     );
 
-    useEffect(() => {
-        monitorMovementSensor();
-    }, [currentDevice]);
-
     const stopDeviceDiscovery = useCallback(async () => {
         await manager.stopDeviceScan();
         setIsDiscovering(false);
@@ -99,20 +84,30 @@ export const BluetoothProvider = ({ children }) => {
         if (isDiscovering) return;
         setIsDiscovering(true);
         console.log("Starting device discovery");
-        await manager.startDeviceScan(null, null, (error, scannedDevice) => {
-            if (error) {
-                throw new Error(error.message);
-            }
-            if (
-                scannedDevice.name != null &&
-                scannedDevice.name.startsWith("CAD")
-            ) {
-                connectToDevice(scannedDevice.id).then(
-                    async (r) => await stopDeviceDiscovery(),
-                );
-            }
-        });
-    }, [scannedDevices]);
+        try {
+            await manager.stopDeviceScan();
+
+            await manager.startDeviceScan(
+                null,
+                null,
+                (error, scannedDevice) => {
+                    if (error) {
+                        throw new Error(error.message);
+                    }
+                    if (
+                        scannedDevice.name != null &&
+                        scannedDevice.name.startsWith("CAD")
+                    ) {
+                        connectToDevice(scannedDevice.id).then(
+                            async (r) => await stopDeviceDiscovery(),
+                        );
+                    }
+                },
+            );
+        } catch (error) {
+            console.error(error);
+        }
+    }, []);
 
     const discoverDeviceServices = useCallback(async () => {
         if (!currentDevice) {
@@ -155,49 +150,97 @@ export const BluetoothProvider = ({ children }) => {
 
     // Todo The original CSC characteristic is a notification that a revolution has occured
 
-    const monitorMovementSensorWrapper = useCallback(async (device: Device) => {
-        if (!device) {
-            throw new Error("No device connected");
-        }
-        console.log("Watching movements");
-        const services: Service[] = await device.services();
+    const [latestRpm, setLatestRpm] = useState(0);
 
-        try {
-            device.monitorCharacteristicForService(
-                CYCLING_SPEED_CADENCE_SERVICE,
-                CSC_MEASUREMENT_CHARACTERISTIC,
-                (error, characteristic) => {
-                    console.log(
-                        "Received device characteristic for service:",
-                        error,
-                    );
-                    const byteCharacters = atob(characteristic.value);
-                    console.log();
-                    const byteNumbers = new Array(byteCharacters.length);
-                    for (let i = 0; i < byteCharacters.length; i++) {
-                        byteNumbers[i] = byteCharacters.charCodeAt(i);
-                    }
-                    // ToDO 2 numbers not 4 ([16 bits])
-                    console.log(byteNumbers);
-                    console.log(
-                        decodeCharacteristicValueToDecimal(
-                            characteristic.value,
-                        ),
-                    );
-                    console.log(
-                        Buffer.from(characteristic.value, "base64").toString(
-                            "utf8",
-                        ),
-                    );
-                },
-            );
-        } catch (error) {
-            console.error(error);
+    const [previousCrankRevCount, setPreviousCrankRevCount] = useState(0);
+    const [previousTimeEvent, setPreviousTimeEvent] = useState(0);
+
+    const [timeDelta, setTimeDelta] = useState(0);
+
+    const monitorMovementSensorWrapper = useCallback(
+        (device: Device) => {
+            if (!device) {
+                throw new Error("No device connected");
+            }
+
+            const updateSensorData = (characteristic) => {
+                const hexResult = Buffer.from(
+                    characteristic.value,
+                    "base64",
+                ).toString("hex");
+
+                const result: string[] = [];
+                for (let i = 0; i < hexResult.length; i += 2) {
+                    result.push(hexResult.slice(i, i + 2));
+                }
+
+                result.reverse();
+
+                const CumulativeCrankRevolutionsHex =
+                    result[result.length - 3] + result[result.length - 2];
+
+                const CumulativeCrankRevolutions = parseInt(
+                    CumulativeCrankRevolutionsHex,
+                    16,
+                );
+
+                const LastCrankEventTimeHex =
+                    result[result.length - 5] + result[result.length - 4];
+
+                const LastCrankEventTime =
+                    parseInt(LastCrankEventTimeHex, 16) / 1024;
+
+                // Update state using the current state values
+                setCrankRevCount((currentCrankRevCount) => {
+                    setPreviousCrankRevCount(currentCrankRevCount);
+                    return CumulativeCrankRevolutions;
+                });
+
+                setCrankTimeEvent((currentCrankTimeEvent) => {
+                    setPreviousTimeEvent(currentCrankTimeEvent);
+                    return LastCrankEventTime;
+                });
+
+                // Calculate time delta in the callback
+                const timeDelta = LastCrankEventTime - crankTimeEvent;
+                setTimeDelta(timeDelta);
+            };
+
+            try {
+                device.monitorCharacteristicForService(
+                    CYCLING_SPEED_CADENCE_SERVICE,
+                    CSC_MEASUREMENT_CHARACTERISTIC,
+                    (error, characteristic) => {
+                        if (error) {
+                            console.error(
+                                "Characteristic monitoring error:",
+                                error,
+                            );
+                            return;
+                        }
+
+                        updateSensorData(characteristic);
+                    },
+                );
+            } catch (error) {
+                console.error("Movement sensor monitoring error:", error);
+            }
+
+            return () => {};
+        },
+        [], // Empty dependency array
+    );
+
+    useEffect(() => {
+        if (timeDelta <= 0 || crankRevCount <= previousCrankRevCount) {
+            setRpm((prevState) => prevState * 0.9);
+        } else {
+            setRpm((crankRevCount - previousCrankRevCount / timeDelta) * 60);
         }
-    }, []);
+    }, [timeDelta]);
 
     const monitorMovementSensor = async () => {
-        await monitorMovementSensorWrapper(currentDevice);
+        monitorMovementSensorWrapper(currentDevice);
     };
 
     const exploreDevice = async () => {
@@ -240,6 +283,7 @@ export const BluetoothProvider = ({ children }) => {
 
     // Context Value
     const contextValue: BluetoothContextType = {
+        rpm,
         isDiscovering,
         isDeviceConnected,
         batteryLevel,

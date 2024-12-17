@@ -7,8 +7,10 @@ import Slider from "@react-native-community/slider";
 import { ProgressBar } from "@react-native-community/progress-bar-android";
 import * as test from "node:test";
 import { useSettings } from "../providers/SettingsProvider";
+import { useBluetooth } from "../providers/BluetoothProvider";
 
 export default function VideoPlayerScreen({ navigation, route }) {
+    const { rpm } = useBluetooth();
     const { path } = route.params;
     const { settings, setSettings, setTotalDistance } = useSettings();
 
@@ -82,6 +84,10 @@ export default function VideoPlayerScreen({ navigation, route }) {
             await incrementDistance(speed * 0.000277778);
         }
     };
+
+    useEffect(() => {
+        updateRPM(rpm);
+    }, [rpm]);
 
     // RPM-based exit timer logic
     useEffect(() => {

@@ -10,7 +10,6 @@
       "web",
       "tv"
     ],
-
     "android": {
       "package": "com.canassist.Motivex",
       "isTV": true,
@@ -25,15 +24,18 @@
     },
     "plugins": [
       [
-	    "@config-plugins/react-native-ble-plx",
+        "@config-plugins/react-native-ble-plx",
         {
           "isBackgroundEnabled": true,
-          "modes": ["peripheral", "central"],
+          "modes": [
+            "peripheral",
+            "central"
+          ],
+          "neverForLocation": false,
           "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to bluetooth devices",
-          "bluetoothPeripheralPermission": "Allow $(PRODUCT_NAME) to connect to bluetooth devices",
+          "bluetoothPeripheralPermission": "Allow $(PRODUCT_NAME) to connect to bluetooth devices"
         }
       ],
-
       [
         "expo-file-system",
         {
@@ -43,10 +45,10 @@
             "BLUETOOTH_SCAN",
             "BLUETOOTH_CONNECT",
             "BLUETOOTH_ADMIN",
-            "BLUETOOTH"
+            "BLUETOOTH",
+            "LOCATION"
           ]
         }
-
       ],
       [
         "@react-native-tvos/config-tv",
@@ -63,7 +65,8 @@
           }
         }
       ],
-      "expo-video"
+      "expo-video",
+      "react-native-ble-plx"
     ]
   }
 }

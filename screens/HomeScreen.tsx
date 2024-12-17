@@ -37,9 +37,39 @@ const HomeScreen = ({ navigation }) => {
                 "Location Permission",
                 "App needs access to your location use bluetooth",
             );
+
+            await requestPermission(
+                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+                "Location Permission",
+                "App needs access to your location use bluetooth",
+            );
+
+            await requestPermission(
+                PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
+                "Location Permission",
+                "App needs access to your location use bluetooth",
+            );
             if (!locationPermissionsGranted) {
                 console.warn("Location Permission Not Granted");
             }
+            /*
+            await requestPermission(
+                PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+                "Bluetooth Permission",
+                "App needs access to your location use bluetooth",
+            );
+            await requestPermission(
+                PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+                "Bluetooth Permission",
+                "App needs access to your location use bluetooth",
+            );
+            await requestPermission(
+                PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
+                "Bluetooth Permission",
+                "App needs access to your location use bluetooth",
+            );
+            */
+
             if (storagePermissionsGranted) {
                 await getFilesList();
             }
