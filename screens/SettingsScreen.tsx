@@ -1,16 +1,20 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, Switch, Button } from "react-native";
 import styles from "../Styles";
 import { useSettings } from "../providers/SettingsProvider";
 import { useBluetooth } from "../providers/BluetoothProvider";
+import Popup from "../components/Popup";
+import { Device } from "react-native-ble-plx";
 
 const SettingsScreen = () => {
     const {
-        startDeviceDiscovery,
-        stopDeviceDiscovery,
-        exploreDevice,
-        monitorMovementSensor,
-        disconnectFromCurrentDevices,
+        scannedDevices,
+        discoverDevices,
+        stopDiscoveringDevices,
+        selectDevice,
+        currentDevice,
+        connectToDevice,
+        disconnectFromDevice,
     } = useBluetooth();
 
     const {
@@ -22,6 +26,7 @@ const SettingsScreen = () => {
         setPlaybackSpeedModifier,
     } = useSettings();
 
+    const [popupVisible, setPopupVisible] = useState(false);
     const updateEffortBar = async (value: boolean) => {
         await setEffortBarEnabled(value);
     };
@@ -54,8 +59,48 @@ const SettingsScreen = () => {
         );
     };
 
+    const handleSelectDevice = async (device: Device) => {
+        // Add extensive logging
+        console.log("Selected Device:", JSON.stringify(device, null, 2));
+        console.log("Device ID:", device.id);
+        console.log("Device Name:", device.name);
+
+        try {
+            // Add null checks
+            if (!device || !device.id) {
+                console.error("Invalid device selected");
+                return;
+            }
+
+            stopDiscoveringDevices();
+            const connected = await connectToDevice(device.id);
+
+            if (!connected) {
+                console.error("Failed to connect to device");
+            }
+        } catch (error) {
+            console.error("Error connecting to device:", error);
+        }
+    };
+
+    useEffect(() => {
+        // If devices are found while popup is open, ensure it stays open
+        if (scannedDevices.length > 0) {
+            setPopupVisible(true);
+        }
+    }, [scannedDevices]);
+
     return (
         <View style={styles.settingsContainer}>
+            <Popup
+                visible={popupVisible}
+                onClose={() => {
+                    setPopupVisible(false);
+                    stopDiscoveringDevices();
+                }}
+                devices={scannedDevices}
+                onSelectDevice={handleSelectDevice}
+            />
             <Text style={styles.title}>Settings</Text>
 
             <View style={styles.settingsOption}>
@@ -112,20 +157,22 @@ const SettingsScreen = () => {
             >
                 <Button
                     title="Start Scanning"
-                    onPress={() => startDeviceDiscovery()}
+                    onPress={() => {
+                        setPopupVisible((visible) => !visible);
+                        discoverDevices();
+                    }}
                 />
                 <Button
                     title="Stop Scanning"
-                    onPress={() => stopDeviceDiscovery()}
+                    onPress={() => stopDiscoveringDevices()}
                 />
-                <Button title="View Services" onPress={() => exploreDevice()} />
                 <Button
                     title="Start watching sensor"
-                    onPress={() => monitorMovementSensor()}
+                    onPress={() => console.log("Error")}
                 />
                 <Button
                     title="Disconnect"
-                    onPress={() => disconnectFromCurrentDevices()}
+                    onPress={() => disconnectFromDevice(currentDevice.id)}
                 />
             </View>
         </View>

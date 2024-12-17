@@ -2,11 +2,17 @@ import React, {
     createContext,
     useCallback,
     useContext,
-    useEffect,
     useMemo,
     useState,
 } from "react";
-import { Base64, BleManager, Device } from "react-native-ble-plx";
+import {
+    Base64,
+    BleError,
+    BleManager,
+    Characteristic,
+    Device,
+    ScanMode,
+} from "react-native-ble-plx";
 import { Buffer } from "buffer";
 
 // Define UUIDs for services and characteristics
@@ -18,17 +24,13 @@ const BATTERY_LEVEL_CHARACTERISTIC = "00002A19-0000-1000-8000-00805f9b34fb";
 // Bluetooth Provider Context Interface
 interface BluetoothContextType {
     rpm: number;
-    isDiscovering: boolean;
-    isDeviceConnected: boolean;
-    batteryLevel: string;
-    crankRevCount: number;
-    pairingProgressInfo: string;
-    startDeviceDiscovery: () => void;
-    stopDeviceDiscovery: () => void;
-    pairNewDevice: () => void;
-    exploreDevice: () => void;
-    monitorMovementSensor: () => void;
-    disconnectFromCurrentDevices: () => void;
+    selectDevice: (device: Device | null) => void;
+    currentDevice: Device;
+    discoverDevices: () => void;
+    stopDiscoveringDevices: () => void;
+    connectToDevice: (deviceId: string) => Promise<boolean>;
+    disconnectFromDevice: (deviceId: string) => Promise<void>;
+    scannedDevices: Device[];
 }
 
 // Create React Context
@@ -36,233 +38,240 @@ const BluetoothContext = createContext<BluetoothContextType | undefined>(
     undefined,
 );
 
+interface CSC_DATA {
+    flags: string; // Config Flags
+    CumulativeCrankRevolutions: number; // Current Crank Rotations
+    LastCrankEventTime: number; // Last Crank Event Time
+}
+
 export const BluetoothProvider = ({ children }) => {
     const manager = useMemo(() => new BleManager(), []);
-    const [isDiscovering, setIsDiscovering] = useState(false);
-    const [isDeviceConnected, setIsDeviceConnected] = useState(false);
-    const [batteryLevel, setBatteryLevel] = useState("");
     const [pairingProgressInfo, setPairingProgressInfo] = useState("");
     const [currentDevice, setCurrentDevice] = useState<Device | null>(null);
-    const [isPairing, setIsPairing] = useState(false);
 
     const [rpm, setRpm] = useState(0);
     const [crankRevCount, setCrankRevCount] = useState(0);
-    const [crankTimeEvent, setCrankTimeEvent] = useState(0);
 
-    const [scannedDevices, setScannedDevices] = useState([]);
+    ///// New
 
-    const connectToDevice = useCallback(
-        async (deviceId: string): Promise<boolean> => {
-            try {
-                const connectedDevices = await manager.devices(null);
-                for (let dev of connectedDevices) {
-                    if (dev.id === deviceId) {
-                        setCurrentDevice(dev);
-                        console.info(`Already connected to ${dev.name}`);
-                        return true;
+    const [scannedDevices, setScannedDevices] = useState<Device[]>([]);
+    const [isDiscovering, setIsDiscovering] = useState(false);
+    const bufferCCR: number[] = [0, 0, 0, 0];
+    const bufferLCET: number[] = [0, 0, 0, 0];
+    const [bufferPointer, setBufferPointer] = useState<number>(0);
+
+    const discoverDevices = useCallback(() => {
+        if (isDiscovering) {
+            return;
+        } else {
+            setIsDiscovering(true);
+            //setScannedDevices([]);
+        }
+        try {
+            const deviceScanTimeout = setTimeout(async () => {
+                await stopDiscoveringDevices();
+                clearTimeout(deviceScanTimeout);
+            }, 15000);
+            manager.startDeviceScan(
+                null,
+                { allowDuplicates: false, scanMode: ScanMode.LowLatency },
+                onScannedDevice,
+            );
+        } catch (error) {
+            console.log("Error starting device scan:", error);
+        }
+    }, [manager, isDiscovering]);
+
+    const selectDevice = (device: Device | null) => {
+        setCurrentDevice(device);
+    };
+
+    const stopDiscoveringDevices = () => {
+        if (!isDiscovering) {
+            return;
+        } else {
+            setIsDiscovering(false);
+        }
+        try {
+            manager.stopDeviceScan();
+        } catch (error) {
+            console.log("Error stopping device scan:", error);
+        }
+    };
+
+    const isDuplicated = (devices: Device[], nextDevice: Device | null) => {
+        return devices.some((device) => device.id === nextDevice?.id);
+    };
+
+    const onScannedDevice = useCallback(
+        async (error: BleError, device: Device) => {
+            if (error) {
+                console.error(error);
+                return;
+            } else if (
+                device &&
+                !scannedDevices.includes(device) &&
+                device.isConnectable == true &&
+                device.name !== null
+            ) {
+                setScannedDevices((prevState) => {
+                    if (!isDuplicated(prevState, device)) {
+                        return [...prevState, device];
                     }
-                }
-                const newDevice = await manager.connectToDevice(deviceId);
-                setCurrentDevice(newDevice);
-
-                console.info(`Connected to ${newDevice.name}`);
-                return true;
-            } catch (error) {
-                console.error(`Error with connecting to device ${error}`);
-                return false;
+                    return prevState;
+                });
+                console.info("Found Device:", device.name);
             }
         },
         [],
     );
 
-    const stopDeviceDiscovery = useCallback(async () => {
-        await manager.stopDeviceScan();
-        setIsDiscovering(false);
-    }, []);
-
-    const startDeviceDiscovery = useCallback(async () => {
-        if (isDiscovering) return;
-        setIsDiscovering(true);
-        console.log("Starting device discovery");
-        try {
-            await manager.stopDeviceScan();
-
-            await manager.startDeviceScan(
-                null,
-                null,
-                (error, scannedDevice) => {
-                    if (error) {
-                        throw new Error(error.message);
-                    }
-                    if (
-                        scannedDevice.name != null &&
-                        scannedDevice.name.startsWith("CAD")
-                    ) {
-                        connectToDevice(scannedDevice.id).then(
-                            async (r) => await stopDeviceDiscovery(),
-                        );
-                    }
-                },
-            );
-        } catch (error) {
-            console.error(error);
-        }
-    }, []);
-
-    const discoverDeviceServices = useCallback(async () => {
-        if (!currentDevice) {
-            throw new Error("Device is not connected to the app");
-        }
-        try {
-            await currentDevice.discoverAllServicesAndCharacteristics();
-        } catch (error) {
-            console.log(`discover all services ${error}`);
+    const connectToDevice = useCallback(
+        async (deviceId: string): Promise<boolean> => {
             try {
-                await (
-                    await manager.connectToDevice(currentDevice.id)
-                ).discoverAllServicesAndCharacteristics();
-            } catch (error) {
-                console.error(error);
-            }
-        }
-    }, [currentDevice]);
+                try {
+                    const connectedDevice =
+                        await manager.connectToDevice(deviceId);
+                    await connectedDevice.discoverAllServicesAndCharacteristics();
+                    setCurrentDevice(connectedDevice);
+                    console.info(`Connected to: ${connectedDevice.name}`);
+                } catch (error) {
+                    const connectedDevices = await manager.devices([deviceId]);
+                    if (connectedDevices.length > 0)
+                        console.log(connectedDevices[0].name);
+                }
 
-    const disconnectFromDevice = useCallback(async (deviceId: string) => {
+                return true;
+            } catch (error) {
+                console.error("Error with connecting to device:", error);
+                return false;
+            }
+        },
+        [manager],
+    );
+
+    const disconnectFromDevice = async (deviceId: string) => {
         try {
             await manager.cancelDeviceConnection(deviceId);
             setCurrentDevice(undefined);
         } catch (error) {
-            throw new Error(error);
+            console.error("Error disconnecting from device:", error);
         }
-    }, []);
-
-    const disconnectFromCurrentDevices = useCallback(async () => {
-        try {
-            const devices: Device[] = await manager.connectedDevices(null);
-            for (const device of devices) {
-                await disconnectFromDevice(device.id);
-                console.log("Disconnected device:", device.name);
-            }
-        } catch (error) {
-            console.error(error);
-        }
-    }, [disconnectFromDevice]);
+    };
 
     // Todo The original CSC characteristic is a notification that a revolution has occured
 
-    const [latestRpm, setLatestRpm] = useState(0);
-
-    const [previousCrankRevCount, setPreviousCrankRevCount] = useState(0);
-    const [previousTimeEvent, setPreviousTimeEvent] = useState(0);
+    const [CCR, setCCR] = useState(0);
+    const [LCET, setLCET] = useState(0);
 
     const [timeDelta, setTimeDelta] = useState(0);
 
-    const monitorMovementSensorWrapper = useCallback(
-        (device: Device) => {
-            if (!device) {
-                throw new Error("No device connected");
-            }
+    const extractCSCData = (
+        rawCharacteristicOutput: Characteristic,
+    ): CSC_DATA => {
+        const hexResult = Buffer.from(
+            rawCharacteristicOutput.value,
+            "base64",
+        ).toString("hex");
 
-            const updateSensorData = (characteristic) => {
-                const hexResult = Buffer.from(
-                    characteristic.value,
-                    "base64",
-                ).toString("hex");
-
-                const result: string[] = [];
-                for (let i = 0; i < hexResult.length; i += 2) {
-                    result.push(hexResult.slice(i, i + 2));
-                }
-
-                result.reverse();
-
-                const CumulativeCrankRevolutionsHex =
-                    result[result.length - 3] + result[result.length - 2];
-
-                const CumulativeCrankRevolutions = parseInt(
-                    CumulativeCrankRevolutionsHex,
-                    16,
-                );
-
-                const LastCrankEventTimeHex =
-                    result[result.length - 5] + result[result.length - 4];
-
-                const LastCrankEventTime =
-                    parseInt(LastCrankEventTimeHex, 16) / 1024;
-
-                // Update state using the current state values
-                setCrankRevCount((currentCrankRevCount) => {
-                    setPreviousCrankRevCount(currentCrankRevCount);
-                    return CumulativeCrankRevolutions;
-                });
-
-                setCrankTimeEvent((currentCrankTimeEvent) => {
-                    setPreviousTimeEvent(currentCrankTimeEvent);
-                    return LastCrankEventTime;
-                });
-
-                // Calculate time delta in the callback
-                const timeDelta = LastCrankEventTime - crankTimeEvent;
-                setTimeDelta(timeDelta);
-            };
-
-            try {
-                device.monitorCharacteristicForService(
-                    CYCLING_SPEED_CADENCE_SERVICE,
-                    CSC_MEASUREMENT_CHARACTERISTIC,
-                    (error, characteristic) => {
-                        if (error) {
-                            console.error(
-                                "Characteristic monitoring error:",
-                                error,
-                            );
-                            return;
-                        }
-
-                        updateSensorData(characteristic);
-                    },
-                );
-            } catch (error) {
-                console.error("Movement sensor monitoring error:", error);
-            }
-
-            return () => {};
-        },
-        [], // Empty dependency array
-    );
-
-    useEffect(() => {
-        if (timeDelta <= 0 || crankRevCount <= previousCrankRevCount) {
-            setRpm((prevState) => prevState * 0.9);
-        } else {
-            setRpm((crankRevCount - previousCrankRevCount / timeDelta) * 60);
+        const result: string[] = [];
+        for (let i = 0; i < hexResult.length; i += 2) {
+            result.push(hexResult.slice(i, i + 2));
         }
-    }, [timeDelta]);
+
+        result.reverse();
+
+        const flags = result[result.length - 1];
+
+        const CumulativeCrankRevolutionsHex =
+            result[result.length - 3] + result[result.length - 2];
+
+        const CumulativeCrankRevolutions = parseInt(
+            CumulativeCrankRevolutionsHex,
+            16,
+        );
+
+        const LastCrankEventTimeHex =
+            result[result.length - 5] + result[result.length - 4];
+
+        const LastCrankEventTime = parseInt(LastCrankEventTimeHex, 16) / 1024;
+
+        return { flags, CumulativeCrankRevolutions, LastCrankEventTime };
+    };
+
+    const updateRpm = (
+        prevCCR: number,
+        curCCR: number,
+        prevLCET: number,
+        curLCET: number,
+    ) => {
+        if (curCCR <= prevCCR || curLCET <= prevLCET) {
+            return;
+        } else {
+            bufferCCR[bufferPointer] = curCCR - prevCCR;
+            bufferLCET[bufferPointer] = curLCET - prevLCET;
+            setBufferPointer((prevState) => (prevState += 1) % 4);
+            let averageCCR = 0;
+            for (let i = 0; i < bufferCCR.length; ++i) {
+                averageCCR += i;
+            }
+            averageCCR = averageCCR / 4;
+            setRpm(averageCCR / (curLCET - prevLCET));
+            return;
+        }
+    };
+
+    const onCSCNotification = (
+        error: BleError,
+        characteristic: Characteristic,
+    ) => {
+        if (error) {
+            console.error("Error from CCR notification:", error);
+            return;
+        } else if (!characteristic?.value) {
+            console.error("Error receiving data:", error);
+            return;
+        }
+
+        const { CumulativeCrankRevolutions, LastCrankEventTime } =
+            extractCSCData(characteristic);
+
+        setCCR((prevCCR) => {
+            setLCET((prevLCET) => {
+                updateRpm(
+                    prevCCR,
+                    CumulativeCrankRevolutions,
+                    prevLCET,
+                    LastCrankEventTime,
+                );
+                return LastCrankEventTime;
+            });
+            return CumulativeCrankRevolutions;
+        });
+        setLCET(LastCrankEventTime);
+        return;
+    };
+
+    const monitorMovementSensorWrapper = (device: Device) => {
+        if (!device) {
+            throw new Error("No device connected");
+        }
+
+        try {
+            device.monitorCharacteristicForService(
+                CYCLING_SPEED_CADENCE_SERVICE,
+                CSC_MEASUREMENT_CHARACTERISTIC,
+                onCSCNotification,
+            );
+        } catch (error) {
+            console.error("Movement sensor monitoring error:", error);
+        }
+
+        return () => {};
+    };
 
     const monitorMovementSensor = async () => {
         monitorMovementSensorWrapper(currentDevice);
-    };
-
-    const exploreDevice = async () => {
-        console.log(`Explore device ${currentDevice}`);
-        await discoverDeviceServices();
-        const device = currentDevice;
-        console.log(`Device Name: ${device.name}`);
-        console.log(`Device ID: ${device.id}`);
-
-        const services = await device.services();
-        if (services.length === 0) console.log("No services");
-        for (const service of services) {
-            console.log("Service UUID:", service.uuid);
-
-            const characteristics = await device.characteristicsForService(
-                service.uuid,
-            );
-
-            for (const characteristic of characteristics) {
-                console.log("- Characteristic UUID:", characteristic.uuid);
-            }
-        }
     };
 
     const decodeCharacteristicValueToString = (value: Base64) => {
@@ -284,17 +293,13 @@ export const BluetoothProvider = ({ children }) => {
     // Context Value
     const contextValue: BluetoothContextType = {
         rpm,
-        isDiscovering,
-        isDeviceConnected,
-        batteryLevel,
-        crankRevCount,
-        pairingProgressInfo,
-        startDeviceDiscovery,
-        stopDeviceDiscovery,
-        pairNewDevice,
-        exploreDevice,
-        monitorMovementSensor,
-        disconnectFromCurrentDevices,
+        currentDevice,
+        selectDevice,
+        discoverDevices,
+        stopDiscoveringDevices,
+        connectToDevice,
+        disconnectFromDevice,
+        scannedDevices,
     };
 
     return (
